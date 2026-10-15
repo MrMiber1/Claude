@@ -6,6 +6,7 @@
 - `.claude/agents/flight-search.md` — описание субагента `flight-search`: что спрашивать, как искать, как отвечать.
 - `tools/search_flights.py` — бесплатный поиск на Aviasales Data API (Travelpayouts), кэш цен. Только стандартная библиотека Python 3.
 - `tools/search_ignav.py` — живой поиск на Ignav API: цены за всех пассажиров, детали пересадок, ссылки на покупку. Платный после 1000 разовых бесплатных запросов.
+- `tools/render_report.py` и `tools/report_template.html` — страница наглядного сравнения вариантов из выдачи Ignav.
 
 ## Как это работает
 - Запрос идёт на `https://api.travelpayouts.com/aviasales/v3/prices_for_dates`.
@@ -41,6 +42,18 @@
   Признак `requires_self_transfer` показывает отдельные билеты.
 - `--links IGNAV_ID` возвращает ссылку на покупку (платный запрос; поля пассажиров и рынка в нём не принимаются).
 - Ошибки: 401 нет ключа, 402 нужна оплата (https://ignav.com/dashboard), 429 месячный лимит расходов, 424/502/503 временные (инструмент повторяет).
+
+## Страница сравнения (`tools/render_report.py`, `tools/report_template.html`)
+Из выдачи Ignav собирается одна самодостаточная HTML-страница: карточки с полосами «перелёт и пересадка» в общем
+масштабе, сортировка, фильтры, таблица, сравнение до трёх вариантов, ссылки на покупку. Работает на телефоне, есть тёмная тема.
+```
+python3 tools/search_ignav.py MUC GOI --depart 2026-12-23..2026-12-25 --return 2027-01-07..2027-01-09 --adults 2 --children 2 --max-stops 2 --limit 40 --max-requests 9 --json > goi.json
+python3 tools/render_report.py report.html goi.json --title "Билеты в Гоа" --eyebrow "MUC → GOI" --subtitle "2 взрослых + 2 ребёнка" --passengers 4 [--links links.json]
+```
+Файл `report.html` публикуется инструментом Artifact (ссылка остаётся приватной, пока автор не поделится ею).
+`links.json` — словарь `{ignav_id: [{provider, url, price}]}`, ссылки получают командой `search_ignav.py --links ID --json`
+(платный запрос на каждый вариант; `ignav_id` живёт недолго, получать ссылки нужно сразу после поиска).
+Страница показывает время получения данных: цены меняются за часы, лучший вариант может исчезнуть.
 
 ## Проверка
 `python3 tools/search_flights.py MOW LED --depart 2026-11`
