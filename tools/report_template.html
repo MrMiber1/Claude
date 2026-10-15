@@ -323,10 +323,10 @@ table.cmp { min-width: 0; }
       ['Даты', function (i) { return dm(i.outDate) + ' → ' + dm(i.retDate); }],
       ['Туда: в пути', function (i) { return dur(i.out.minutes); }, function (i) { return i.out.minutes; }],
       ['Туда: пересадки', function (i) { return layoverSummary(i.out); }],
-      ['Прилёт в Гоа', function (i) { return dm(i.arrDest) + ' ' + hm(i.arrDest); }],
+      ['Прилёт', function (i) { return i.airport + ' · ' + dm(i.arrDest) + ' ' + hm(i.arrDest); }],
       ['Обратно: в пути', function (i) { return dur(i.ret.minutes); }, function (i) { return i.ret.minutes; }],
       ['Обратно: пересадки', function (i) { return layoverSummary(i.ret); }],
-      ['Вылет из Гоа', function (i) { return dm(i.depDest) + ' ' + hm(i.depDest); }],
+      ['Вылет обратно', function (i) { return i.ret.segments[0].from + ' · ' + dm(i.depDest) + ' ' + hm(i.depDest); }],
       ['Билет', function (i) { return i.self === true ? 'отдельные билеты' : i.self === false ? 'один билет' : 'нет данных'; }],
       ['Багаж', function (i) { return i.bags ? 'ручная кладь: ' + (i.bags.carry_on == null ? 'нет данных' : i.bags.carry_on) + ', багаж: ' + (i.bags.checked == null ? 'нет данных' : i.bags.checked) : 'нет данных'; }],
       ['Где купить', function (i) { return i.links.length ? esc(i.links.map(function (l) { return l.provider; }).join(', ')) : 'по запросу'; }]
