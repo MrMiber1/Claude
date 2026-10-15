@@ -127,6 +127,19 @@ def fmt_minutes(minutes):
     return f"{h}ч {m:02d}м"
 
 
+def night_minutes(arrive, depart):
+    """Сколько минут пересадки приходится на ночь (23:00–06:00 по местному времени)."""
+    total = 0
+    day = arrive.date() - dt.timedelta(days=1)
+    while day <= depart.date():
+        start = dt.datetime.combine(day, dt.time(23, 0))
+        end = start + dt.timedelta(hours=7)
+        overlap = (min(depart, end) - max(arrive, start)).total_seconds() / 60
+        total += max(0, overlap)
+        day += dt.timedelta(days=1)
+    return int(total)
+
+
 def describe_leg(leg):
     segs = leg.get("segments") or []
     if not segs:
@@ -137,7 +150,12 @@ def describe_leg(leg):
     for a, b in zip(segs, segs[1:]):
         try:
             minutes = (parse_utc(b["departure_time_utc"]) - parse_utc(a["arrival_time_utc"])).total_seconds() / 60
-            layovers.append(f"{a['arrival_airport']} {fmt_minutes(minutes)}")
+            arr = dt.datetime.fromisoformat(a["arrival_time_local"][:16])
+            dep = dt.datetime.fromisoformat(b["departure_time_local"][:16])
+            night = night_minutes(arr, dep)
+            night_text = f"ночью ≈{fmt_minutes(night)}" if night >= 60 else "ночью нет"
+            layovers.append(f"{a['arrival_airport']} {fmt_minutes(minutes)} "
+                            f"(местное время {arr:%d.%m %H:%M} → {dep:%d.%m %H:%M}, {night_text})")
         except (KeyError, TypeError, ValueError):
             layovers.append(f"{a['arrival_airport']} ?")
     line = (f"{route} | вылет {segs[0]['departure_time_local'][:16].replace('T', ' ')}"
