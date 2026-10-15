@@ -210,19 +210,20 @@ table.cmp { min-width: 0; }
   function hour(s) { return +s.slice(11, 13); }
 
   var items = D.items.map(function (it) {
-    var out = it.outbound, ret = it.inbound;
+    var out = it.outbound, ret = it.inbound || null;
     var lastOut = out.segments[out.segments.length - 1];
     return {
       id: it.id, price: it.price, per: it.price / D.passengers, out: out, ret: ret, self: it.self, bags: it.bags, links: it.links || [],
-      outDate: out.segments[0].dep.slice(0, 10), retDate: ret.segments[0].dep.slice(0, 10),
-      airport: lastOut.to, carrier: [out.carrier, ret.carrier].filter(function (x, i, a) { return x && a.indexOf(x) === i; }).join(' / '),
-      stops: Math.max(out.segments.length, ret.segments.length) - 1,
-      totalStops: out.segments.length + ret.segments.length - 2,
-      time: out.minutes + ret.minutes,
-      arrDest: lastOut.arr, depDest: ret.segments[0].dep, outDep: out.segments[0].dep
+      outDate: out.segments[0].dep.slice(0, 10), retDate: ret ? ret.segments[0].dep.slice(0, 10) : null,
+      airport: lastOut.to, carrier: [out.carrier, ret && ret.carrier].filter(function (x, i, a) { return x && a.indexOf(x) === i; }).join(' / '),
+      stops: Math.max(out.segments.length, ret ? ret.segments.length : 0) - 1,
+      totalStops: out.segments.length - 1 + (ret ? ret.segments.length - 1 : 0),
+      time: out.minutes + (ret ? ret.minutes : 0),
+      arrDest: lastOut.arr, depDest: ret ? ret.segments[0].dep : null, outDep: out.segments[0].dep
     };
   });
-  var maxLeg = Math.max.apply(null, items.map(function (i) { return Math.max(i.out.minutes, i.ret.minutes); }));
+  var ONEWAY = items.every(function (i) { return !i.ret; });
+  var maxLeg = Math.max.apply(null, items.map(function (i) { return Math.max(i.out.minutes, i.ret ? i.ret.minutes : 0); }));
   var minPrice = Math.min.apply(null, items.map(function (i) { return i.price; }));
   var minTime = Math.min.apply(null, items.map(function (i) { return i.time; }));
 
@@ -261,7 +262,7 @@ table.cmp { min-width: 0; }
     if (it.price === minPrice) t.push('<span class="tag good">Самый дешёвый</span>');
     if (it.time === minTime) t.push('<span class="tag good">Самый быстрый</span>');
     if (it.self === true) t.push('<span class="tag warn">Отдельные билеты: при опоздании второй рейс пропадёт</span>');
-    var ah = hour(it.arrDest), dh = hour(it.depDest);
+    var ah = hour(it.arrDest), dh = it.depDest ? hour(it.depDest) : 99;
     if (ah < 6) t.push('<span class="tag warn">Прилёт ночью, ' + hm(it.arrDest) + '</span>');
     if (dh < 6) t.push('<span class="tag warn">Вылет обратно ночью, ' + hm(it.depDest) + '</span>');
     return t.join('');
@@ -278,10 +279,10 @@ table.cmp { min-width: 0; }
   function cardHTML(it) {
     var sel = state.sel.indexOf(it.id) >= 0;
     return '<article class="card" data-id="' + it.id + '" data-sel="' + sel + '">' +
-      '<div class="head"><div><div class="price">' + money(it.price) + '</div><div class="per">≈ ' + money(it.per) + ' на человека · ' + esc(it.carrier) + '</div></div>' +
-      '<div class="dates mono">' + dm(it.outDate) + ' → ' + dm(it.retDate) + ' · ' + it.airport + '</div></div>' +
+      '<div class="head"><div><div class="price">' + money(it.price) + '</div><div class="per">' + (D.passengers > 1 ? '≈ ' + money(it.per) + ' на человека · ' : '') + esc(it.carrier) + '</div></div>' +
+      '<div class="dates mono">' + dm(it.outDate) + (it.retDate ? ' → ' + dm(it.retDate) : '') + ' · ' + it.airport + '</div></div>' +
       '<div class="tags">' + tagsFor(it) + '</div>' +
-      legHTML('Туда', it.out, it) + legHTML('Обратно', it.ret, it) +
+      legHTML(it.ret ? 'Туда' : 'Перелёт', it.out, it) + (it.ret ? legHTML('Обратно', it.ret, it) : '') +
       '<div class="foot"><label class="pick"><input type="checkbox" data-pick="' + it.id + '"' + (sel ? ' checked' : '') + '> Сравнить</label><div class="buy">' + buyHTML(it) + '</div></div></article>';
   }
 
@@ -290,21 +291,24 @@ table.cmp { min-width: 0; }
     return leg.layovers.map(function (l) { return l.airport + ' ' + dur(l.min); }).join(', ');
   }
   function tableHTML(list) {
+    var minOut = Math.min.apply(null, list.map(function (x) { return x.out.minutes; }));
+    var minRet = ONEWAY ? 0 : Math.min.apply(null, list.map(function (x) { return x.ret.minutes; }));
     var rows = list.map(function (it) {
       var sel = state.sel.indexOf(it.id) >= 0;
       return '<tr><td><input type="checkbox" data-pick="' + it.id + '"' + (sel ? ' checked' : '') + ' aria-label="Сравнить"></td>' +
         '<td' + (it.price === minPrice ? ' class="best"' : '') + '>' + money(it.price) + '</td>' +
-        '<td>' + dm(it.outDate) + ' → ' + dm(it.retDate) + '<br><span class="per">' + it.airport + ' · ' + esc(it.carrier) + '</span></td>' +
-        '<td' + (it.out.minutes === Math.min.apply(null, list.map(function (x) { return x.out.minutes; })) ? ' class="best"' : '') + '>' + dur(it.out.minutes) + '<br><span class="per">' + esc(layoverSummary(it.out)) + '</span></td>' +
-        '<td' + (it.ret.minutes === Math.min.apply(null, list.map(function (x) { return x.ret.minutes; })) ? ' class="best"' : '') + '>' + dur(it.ret.minutes) + '<br><span class="per">' + esc(layoverSummary(it.ret)) + '</span></td>' +
+        '<td>' + dm(it.outDate) + (it.retDate ? ' → ' + dm(it.retDate) : '') + '<br><span class="per">' + it.airport + ' · ' + esc(it.carrier) + '</span></td>' +
+        '<td' + (it.out.minutes === minOut ? ' class="best"' : '') + '>' + dur(it.out.minutes) + '<br><span class="per">' + esc(layoverSummary(it.out)) + '</span></td>' +
+        (ONEWAY ? '' : '<td' + (it.ret.minutes === minRet ? ' class="best"' : '') + '>' + dur(it.ret.minutes) + '<br><span class="per">' + esc(layoverSummary(it.ret)) + '</span></td>') +
         '<td>' + (it.self === true ? 'отдельные' : it.self === false ? 'один билет' : 'нет данных') + '</td></tr>';
     }).join('');
-    return '<div class="tablewrap"><table><thead><tr><th></th><th>Цена за всех</th><th>Даты</th><th>Туда: в пути, пересадки</th><th>Обратно: в пути, пересадки</th><th>Билет</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    return '<div class="tablewrap"><table><thead><tr><th></th><th>Цена за всех</th><th>Даты</th><th>' + (ONEWAY ? 'В пути, пересадки' : 'Туда: в пути, пересадки') + '</th>' +
+      (ONEWAY ? '' : '<th>Обратно: в пути, пересадки</th>') + '<th>Билет</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
 
   function filtered() {
     var list = items.filter(function (it) {
-      return it.stops <= state.maxStops && (state.dates === 'all' || (it.outDate + '|' + it.retDate) === state.dates) &&
+      return it.stops <= state.maxStops && (state.dates === 'all' || (it.outDate + '|' + (it.retDate || '')) === state.dates) &&
         (state.airport === 'all' || it.airport === state.airport) && (!state.one || it.self !== true);
     });
     var by = { price: function (a, b) { return a.price - b.price; }, time: function (a, b) { return a.time - b.time || a.price - b.price; },
@@ -320,7 +324,7 @@ table.cmp { min-width: 0; }
     var rows = [
       ['Цена за всех', function (i) { return money(i.price); }, function (i) { return i.price; }],
       ['На человека', function (i) { return money(i.per); }, function (i) { return i.per; }],
-      ['Даты', function (i) { return dm(i.outDate) + ' → ' + dm(i.retDate); }],
+      ['Даты', function (i) { return dm(i.outDate) + (i.retDate ? ' → ' + dm(i.retDate) : ''); }],
       ['Туда: в пути', function (i) { return dur(i.out.minutes); }, function (i) { return i.out.minutes; }],
       ['Туда: пересадки', function (i) { return layoverSummary(i.out); }],
       ['Прилёт', function (i) { return i.airport + ' · ' + dm(i.arrDest) + ' ' + hm(i.arrDest); }],
@@ -331,7 +335,8 @@ table.cmp { min-width: 0; }
       ['Багаж', function (i) { return i.bags ? 'ручная кладь: ' + (i.bags.carry_on == null ? 'нет данных' : i.bags.carry_on) + ', багаж: ' + (i.bags.checked == null ? 'нет данных' : i.bags.checked) : 'нет данных'; }],
       ['Где купить', function (i) { return i.links.length ? esc(i.links.map(function (l) { return l.provider; }).join(', ')) : 'по запросу'; }]
     ];
-    var head = '<tr><th></th>' + picked.map(function (i) { return '<th>' + esc(i.carrier) + '<br><span class="per">' + dm(i.outDate) + ' → ' + dm(i.retDate) + '</span></th>'; }).join('') + '</tr>';
+    if (ONEWAY) rows = rows.filter(function (r) { return !/^Обратно|^Вылет обратно/.test(r[0]); });
+    var head = '<tr><th></th>' + picked.map(function (i) { return '<th>' + esc(i.carrier) + '<br><span class="per">' + dm(i.outDate) + (i.retDate ? ' → ' + dm(i.retDate) : '') + '</span></th>'; }).join('') + '</tr>';
     var body = rows.map(function (r) {
       var best = r[2] ? min(r[2]) : null, uniq = r[2] ? picked.filter(function (i) { return r[2](i) === best; }).length < picked.length : false;
       return '<tr><th class="rowh" scope="row">' + r[0] + '</th>' + picked.map(function (i) {
@@ -365,9 +370,10 @@ table.cmp { min-width: 0; }
       '. Билеты быстро дорожают и пропадают: лучший вариант часа назад мог исчезнуть. Перед покупкой проверьте цену по ссылке.';
     document.getElementById('scaleNote').textContent = 'Все полосы в одном масштабе: полная ширина = ' + dur(maxLeg) + ' в пути';
     var pairs = {}, airports = {};
-    items.forEach(function (i) { pairs[i.outDate + '|' + i.retDate] = 1; airports[i.airport] = 1; });
+    items.forEach(function (i) { pairs[i.outDate + '|' + (i.retDate || '')] = 1; airports[i.airport] = 1; });
     var dsel = document.getElementById('fDates');
-    dsel.innerHTML = '<option value="all">все</option>' + Object.keys(pairs).sort().map(function (p) { var a = p.split('|'); return '<option value="' + p + '">' + dm(a[0]) + ' → ' + dm(a[1]) + '</option>'; }).join('');
+    dsel.innerHTML = '<option value="all">все</option>' + Object.keys(pairs).sort().map(function (p) { var a = p.split('|'); return '<option value="' + p + '">' + dm(a[0]) + (a[1] ? ' → ' + dm(a[1]) : '') + '</option>'; }).join('');
+    if (Object.keys(pairs).length < 2) document.getElementById('fDates').parentNode.hidden = true;
     var asel = document.getElementById('fAirport'), ak = Object.keys(airports).sort();
     asel.innerHTML = '<option value="all">все</option>' + ak.map(function (a) { return '<option>' + a + '</option>'; }).join('');
     if (ak.length < 2) document.getElementById('airportLabel').hidden = true;

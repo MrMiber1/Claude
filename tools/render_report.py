@@ -78,16 +78,17 @@ def main(argv=None):
         if data.get("stats", {}).get("oldest_data"):
             observed.append(data["stats"]["oldest_data"])
         for it in data.get("data", []):
-            if it["ignav_id"] in seen or not it.get("inbound"):
+            if it["ignav_id"] in seen:
                 continue
             seen.add(it["ignav_id"])
             currency = it["price"]["currency"]
             items.append({"id": it["ignav_id"], "price": it["price"]["amount"],
-                          "outbound": compact_leg(it["outbound"]), "inbound": compact_leg(it["inbound"]),
+                          "outbound": compact_leg(it["outbound"]),
+                          "inbound": compact_leg(it["inbound"]) if it.get("inbound") else None,
                           "self": it.get("requires_self_transfer"), "bags": it.get("bags"),
                           "links": links.get(it["ignav_id"], [])})
     if not items:
-        raise SystemExit("В файлах нет вариантов туда-обратно: проверьте входные JSON.")
+        raise SystemExit("В файлах нет вариантов: проверьте входные JSON.")
     items.sort(key=lambda i: i["price"])
     notes = args.note or [
         "Цена указана за всех пассажиров поиска, детские тарифы учтены. Данные о багаже есть не у всех вариантов.",
